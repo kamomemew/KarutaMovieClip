@@ -1,141 +1,78 @@
-﻿# 設定値の読み込みを行う
-$configure = @{
-    LosslessCut = "C:\Program Files (x86)\LosslessCut-win-x64\"
-    ffmpeg = "ffmpeg.exe"
-    silence_threshold  = 0.08
-    silence_gap        = 2.0
-    minimal_silence    = 3.5
-}
-if ( Test-Path "configure.json" )
-{
-    $configure=Get-Content -Path "configure.json" -Encoding "utf8" | ConvertFrom-Json
-}
-else
-{
-    ConvertTo-Json -InputObject $configure | Out-File -Encoding utf8 -FilePath configure.json
-}
-
-# ffmpegのパスを特定する
-$exit=$false
-if (!( Test-Path $configure.ffmpeg ))
-{
-    if (!( test-Path $configure.LosslessCut ))
-    {
-        Add-Type -AssemblyName System.Windows.Forms
-        $result = [System.Windows.Forms.MessageBox]::Show("LosslessCutが見つかりませんでした。`nLossLessCutのフォルダを選択してください。","確認","YesNo","Exclamation","Button2")
-        if ($result -eq "Yes")
-        {
-            [void][System.Reflection.Assembly]::LoadWithPartialName("System.windows.forms")
-            $dialog = New-Object System.Windows.Forms.FolderBrowserDialog -Property @{ Description = 'LosslessCutフォルダを選択してください'}
-            if($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK)
-            {
-                $configure.LosslessCut = $dialog.SelectedPath
-                $configure.ffmpeg = @(Get-ChildItem -Path $configure.LosslessCut -Recurse -Filter "ffmpeg.exe")[0].FullName
-                ConvertTo-Json -InputObject $configure | Out-File -Encoding utf8 -FilePath configure.json
-            }
-        }
-    }
-    $configure.ffmpeg = @(Get-ChildItem -Path $configure.LosslessCut -Recurse -Filter "ffmpeg.exe")[0].FullName
-    
-}
-if (!( Test-Path $configure.ffmpeg ))
-{
-    [System.Windows.Forms.MessageBox]::Show("ffmpegが見つかりませんでした。`n終了します。","エラー","OK","Error")
-    exit
-}
-
-
+﻿Import-Module ".\KarutaMovieClip.psm1"
+$configure=Get-Content -Path "configure.json" -Encoding "utf8" | ConvertFrom-Json
 # 動画選択ダイアログを表示する
 [void][System.Reflection.Assembly]::LoadWithPartialName("System.windows.forms")
 $dialog = New-Object System.Windows.Forms.OpenFileDialog -Property @{Title = "動画ファイルを選択してください"}
 $movie = $false
-if($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK)
-{
-    $movie = $dialog.FileName
+if($dialog.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK){
+    exit 1
 }
-else
-{
-    exit
-}
+$movie = $dialog.FileName
 
 # 動画があるフォルダに移動する
 Set-Location (Split-Path -Path $movie -Parent -Resolve)
+# 音量スレッショルド用の値取得
+$volume_raw_text=&$configure.ffmpeg -v error -ss 600  -t 360 -i $movie -af "aresample=44100,asetnsamples=2205,astats=reset=1:metadata=1,ametadata=print:key=lavfi.astats.Overall.peak_level:file='pipe\:1'" -vn -f null - |& { process{ $_.ToString() }}
+$peaks=$volume_raw_text| select-String "peak_level=(.*)$" | &{ process {[float]$($_.matches.groups[1]).ToString() }}
+$silence_threshold=((($peaks|Measure-Object -Average -Minimum).Average) + 1.5).ToString("0.00")
 # FFmpegで空白検出、時間がかかる
-$silence_raw_text=&$configure.ffmpeg -i $movie -af "silencedetect=n=$($configure.silence_threshold):d=1.5:m=0" -vn -f null - 2>&1|% { $_.ToString() }
+$silence_raw_text=&$configure.ffmpeg -i $movie -af "silencedetect=n=$($silence_threshold)dB:d=1.5:m=0" -vn -f null - 2>&1|ForEach-Object { $_.ToString() }
 # 空白の開始と終了を抽出
-$starts = echo $silence_raw_text| Select-String "silence_start: (.*)$"  |ForEach-Object { $($_.matches.groups[1]) }|% { [float]$_.ToString() }
-$ends = echo $silence_raw_text| Select-String "silence_end: (.*) \|" |ForEach-Object { $($_.matches.groups[1]) }|% { [float]$_.ToString() }
+$starts_Array =  $silence_raw_text| Select-String "silence_start: (.*)$"  |ForEach-Object { [float]$($_.matches.groups[1]).ToString() }
+$ends_Array = $silence_raw_text| Select-String "silence_end: (.*) \|" |ForEach-Object { [float]$($_.matches.groups[1]).ToString() }
+$starts = New-Object System.Collections.Generic.List[float]
+$ends   = New-Object System.Collections.Generic.List[float]
+$starts.AddRange([float[]]$starts_Array);$ends.AddRange([float[]]$ends_Array)
 
 # 短い間があれば連結して長い間にする
-$enhanced_starts =New-Object 'System.Collections.Generic.List[float]'
-$enhanced_ends   =New-Object 'System.Collections.Generic.List[float]'
-$enhanced_starts.Add($starts[0])
-$starts=$starts[1..($starts.Length-1)]
-for($i = 0; $i -lt $starts.Length; $i++)
-{
-    if( ($starts[$i] - $ends[$i]) -gt $configure.silence_gap)
-    {
-        $enhanced_starts.Add($starts[$i])
-        $enhanced_ends.Add($ends[$i])
-    }
-}
-$enhanced_ends.Add($ends[-1])
-$starts = @($enhanced_starts)
-$ends   = @($enhanced_ends)
+$starts,$ends = Merge-Gaps -starts $starts -ends $ends -sec 3.9
+# あまりに短い間はおかしいので削除する
+#$starts,$ends = Select-Span -starts $starts -ends $ends -gt 1.4
+# 反転し、「有音部」を抜き出す
+$starts,$ends = Select-Invert -starts $starts -ends $ends
+#$starts,$ends = Select-Span -starts $starts -ends $ends -gt 2
+$starts,$ends = Deny-Gap -before -after -starts $starts -ends $ends -sec 7
 
-# 短すぎる間はおかしいので削除する
-$enhanced_starts = New-Object 'System.Collections.Generic.List[float]'
-$enhanced_ends   = New-Object 'System.Collections.Generic.List[float]'
-for($i = 0; $i -lt $starts.Length; $i++)
+if ($starts.Count -lt 135)
 {
-    if( ($ends[$i] - $starts[$i]) -gt $configure.minimal_silence)
-    {
-        $enhanced_starts.Add($starts[$i])
-        $enhanced_ends.Add($ends[$i])
-    }
-}
-$starts = @($enhanced_starts)
-$ends   = @($enhanced_ends)
-
-# 反転する
-$inverted_starts = New-Object 'System.Collections.Generic.List[float]'
-$inverted_ends   = New-Object 'System.Collections.Generic.List[float]'
-$inverted_starts.Add(0)
-for($i = 0; $i -lt ($starts.Length-1); $i++)
-{
-        $inverted_starts.Add($ends[$i])
-        $inverted_ends.Add($starts[$i])
-}
-$inverted_ends.Add($starts[-1])
-
-# segment.csvに書き込む
-if(Test-Path segment.csv){Remove-Item segment.csv}
-for($i = 0; $i -lt (@($inverted_starts).Length); $i++)
-{
-    [string]$inverted_starts[$i]+","+[string]$inverted_ends[$i]+",seg_"+($i+1) |Out-File -Append -Encoding utf8 segment.csv
-}
-
-$sum_length=0
-for($i = 0; $i -lt (@($inverted_starts).Length); $i++)
-{
-    $sum_length = $sum_length + ($inverted_ends[$i] - $inverted_starts[$i])
-}
-$average_length = $sum_length/$i
-
-if ((@($inverted_starts).Length) -lt 135)
-{
-    if ($average_length -lt 12)
-    {
+    $lengths = 0..($starts.Count - 1 ) | ForEach-Object { $ends[$_] - $starts[$_] }
+    $average_length = ($lengths | Measure-Object -Average).Average
+    if ($average_length -lt 12){
         [System.Windows.Forms.MessageBox]::Show("完了しましたが、silence_thresholdの調整をお勧めします。`n(もう少し小さく)","info","OK","Information ")
     }
-    else
-    {
+    else{
         [System.Windows.Forms.MessageBox]::Show("完了しましたが、silence_thresholdの調整をお勧めします。`n(もう少し大きく)","info","OK","Information ")
     }
-    exit
 }
 
-[System.Windows.Forms.MessageBox]::Show("完了しました。","info","OK","Information ")
+$proceed=[System.Windows.Forms.MessageBox]::Show("続けて上の句検出しますか？`n(実験的機能です。)","info","YesNo","Information ")
+if($proceed -eq "No"){
+    if(Test-Path segment.csv){Remove-Item segment.csv}
+    for($i = 0; $i -lt $starts.Count; $i++){
+        [string]$starts[$i]+","+[string]$ends[$i]+",seg_"+($i+1) |Out-File -Append -Encoding utf8 segment.csv
+    }
+    exit 0
+}
 
+$kamistarts   = New-Object System.Collections.Generic.List[float]
+$kamiends     = New-Object System.Collections.Generic.List[float]
+$shimostarts   = New-Object System.Collections.Generic.List[float]
+$shimoends     = New-Object System.Collections.Generic.List[float]
 
-
+$kamistarts.Add($starts[0]);$kamiends.Add($ends[0])
+for ($i = 1; $i -lt $starts.Count; $i++) {
+    if (($starts[$i] - $ends[$i-1]) -ge 6 ) {
+        $shimostarts.Add($starts[$i]);$shimoends.Add($ends[$i])
+    }
+    else{
+        $kamistarts.Add($starts[$i]);$kamiends.Add($ends[$i])
+    }
+}
+if(Test-Path segment.csv){Remove-Item segment.csv}
+for($i = 0; $i -lt $kamistarts.Count; $i++){
+    [string]$kamistarts[$i]+","+[string]$kamiends[$i]+",kami_"+($i+1) |Out-File -Append -Encoding utf8 segment.csv
+}
+for($i = 0; $i -lt $shimostarts.Count; $i++){
+    [string]$shimostarts[$i]+","+[string]$shimoends[$i]+",shimo_"+($i+1) |Out-File -Append -Encoding utf8 segment.csv
+}
+exit 0

@@ -242,7 +242,7 @@ function Get-VolumeInfo {
         }
         $InfoHash=@{}
         $VolumeInfo=$period|Measure-Object -Maximum -Minimum -Average
-        $InfoHash.Add("DynamicRange",$VolumeInfo.Maximum/$VolumeInfo.Minimum)
+        $InfoHash.Add("DynamicRange",$VolumeInfo.Maximum-$VolumeInfo.Minimum)
         $InfoHash.Add("Maximum",$VolumeInfo.Maximum)
         $InfoHash.Add("Minimum",$VolumeInfo.Minimum)
         $InfoHash.Add("Average",$VolumeInfo.Average)
