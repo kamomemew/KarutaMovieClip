@@ -2,9 +2,6 @@
 $configure = @{
     LosslessCut = "C:\Program Files (x86)\LosslessCut-win-x64\"
     ffmpeg = "ffmpeg.exe"
-    silence_threshold  = 0.08
-    silence_gap        = 2.0
-    minimal_silence    = 3.5
 }
 if ( Test-Path "configure.json" )
 {
