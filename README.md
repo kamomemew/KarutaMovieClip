@@ -5,13 +5,13 @@
 
 ## インストール
 [リリースページ](https://github.com/kamomemew/KarutaMovieClip/releases)からダウンロードし、解凍してください。<br>
-このソフトウェアは動画編集には[LosslessCut](https://github.com/mifi/lossless-cut/)を使用するので、こちらもインストールしておいてください。
+このソフトウェアは動画編集には[LosslessCut](https://github.com/mifi/lossless-cut/)を使用するので、こちらもインストールしておいてください。(こちらも基本的に解凍するだけです。)
 LossLessCutのインストールについてはここで詳しく触れませんが、表示を日本語にしておくと便利です。
 
 
 ## 設定
 KMC.batを起動してください。
-初回起動時にLosslessCutのフォルダを聞くので、LosslessCutのフォルダ(たとえば`C:\Program Files (x86)\LosslessCut-win-x64<`など)
+初回起動時にLosslessCutのフォルダを聞くので、LosslessCutのフォルダ(たとえば`C:\Program Files (x86)\LosslessCut-win-x64\`など)
 を入力してください。
 `configure.json`は設定ファイルです。
 以前は音量閾値の設定が必要でしたが、現在は自動で判別するので基本的に手動での編集は不要です。
@@ -27,7 +27,7 @@ KMC.batを起動してください。
 動画のカットはLosslessCutで行ってください。
 LosslessCutで動画を読み込んだあと、ファイル > プロジェクトインポート > 秒単位の時間(CSV) よりsegment.csvを読み込ませます。
 おおむね読みの部分が残っているはずです。
-実験的に下の句分離機能を付けたので、明らかに下の句である部分は分離されます。
+(実験的に下の句分離機能を付けたので、有効にすると明らかに下の句である部分は分離されます。)
 
 LosslessCutでセグメントを再生し、上の句が入っているセグメントを残しそのほかは削除します。
 
