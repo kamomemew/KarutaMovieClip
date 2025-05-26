@@ -1,4 +1,73 @@
-﻿function Merge-Gaps {
+﻿function Get-Percentile {
+# MIT License
+
+# Copyright (c) 2022 Jim Birley
+
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+<#
+.SYNOPSIS
+    Returns the specified percentile value for a given set of numbers.
+ 
+.DESCRIPTION
+    This function expects a set of numbers passed as an array to the 'Sequence' parameter.  For a given percentile, passed as the 'Percentile' argument,
+    it returns the calculated percentile value for the set of numbers.
+ 
+.PARAMETER Sequence
+    A array of integer and/or decimal values the function uses as the data set.
+.PARAMETER Percentile
+    The target percentile to be used by the function's algorithm. 
+ 
+.EXAMPLE
+    $values = 98.2,96.5,92.0,97.8,100,95.6,93.3
+    Get-Percentile -Sequence $values -Percentile 0.95
+ 
+.NOTES
+    Author:  Jim Birley
+#>
+
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory)] 
+        [Double[]]$Sequence
+        ,
+        [Parameter(Mandatory)]
+        [Double]$Percentile
+    )
+   
+    $Sequence = $Sequence | Sort-Object
+    [int]$N = $Sequence.Length
+    Write-Verbose "N is $N"
+    [Double]$Num = ($N - 1) * $Percentile + 1
+    Write-Verbose "Num is $Num"
+    if ($num -eq 1) {
+        return $Sequence[0]
+    } elseif ($num -eq $N) {
+        return $Sequence[$N-1]
+    } else {
+        $k = [Math]::Floor($Num)
+        Write-Verbose "k is $k"
+        [Double]$d = $num - $k
+        Write-Verbose "d is $d"
+        return $Sequence[$k - 1] + $d * ($Sequence[$k] - $Sequence[$k - 1])
+    }
+}
+function Merge-Gaps {
     param (
         [System.Collections.Generic.List[float]]$starts,
         [System.Collections.Generic.List[float]]$ends,
@@ -258,4 +327,4 @@ Export-ModuleMember -Function Test-DataIntegrity
 Export-ModuleMember -Function Test-Silence
 Export-ModuleMember -Function Get-SlopeFactor
 Export-ModuleMember -Function Get-VolumeInfo
-
+Export-ModuleMember -Function Get-Percentile

@@ -12,11 +12,11 @@ $movie = $dialog.FileName
 # 動画があるフォルダに移動する
 Set-Location (Split-Path -Path $movie -Parent -Resolve)
 # 音量スレッショルド用の値取得
-$volume_raw_text=&$configure.ffmpeg -v error -ss 600  -t 360 -i $movie -af "aresample=44100,asetnsamples=2205,astats=reset=1:metadata=1,ametadata=print:key=lavfi.astats.Overall.peak_level:file='pipe\:1'" -vn -f null - |& { process{ $_.ToString() }}
+$volume_raw_text=&$configure.ffmpeg -v error -ss 600  -t 360 -i $movie -af "highpass=f=200,lowpass=f=3000,afftdn,aresample=44100,asetnsamples=2205,astats=reset=1:metadata=1,ametadata=print:key=lavfi.astats.Overall.peak_level:file='pipe\:1'" -vn -f null - |& { process{ $_.ToString() }}
 $peaks=$volume_raw_text| select-String "peak_level=(.*)$" | &{ process {[float]$($_.matches.groups[1]).ToString() }}
-$silence_threshold=((($peaks|Measure-Object -Average -Minimum).Average) + 1.5).ToString("0.00")
+$silence_threshold=(Get-Percentile -Sequence $peaks -Percentile 0.7).ToString("0.00")
 # FFmpegで空白検出、時間がかかる
-$silence_raw_text=&$configure.ffmpeg -i $movie -af "silencedetect=n=$($silence_threshold)dB:d=1.5:m=0" -vn -f null - 2>&1|ForEach-Object { $_.ToString() }
+$silence_raw_text=&$configure.ffmpeg -i $movie -af "highpass=f=200,lowpass=f=3000,afftdn,silencedetect=n=$($silence_threshold)dB:d=1.5:m=0" -vn -f null - 2>&1|ForEach-Object { $_.ToString() }
 # 空白の開始と終了を抽出
 $starts_Array =  $silence_raw_text| Select-String "silence_start: (.*)$"  |ForEach-Object { [float]$($_.matches.groups[1]).ToString() }
 $ends_Array = $silence_raw_text| Select-String "silence_end: (.*) \|" |ForEach-Object { [float]$($_.matches.groups[1]).ToString() }
@@ -61,7 +61,9 @@ $shimoends     = New-Object System.Collections.Generic.List[float]
 
 $kamistarts.Add($starts[0]);$kamiends.Add($ends[0])
 for ($i = 1; $i -lt $starts.Count; $i++) {
-    if (($starts[$i] - $ends[$i-1]) -ge 6 ) {
+    $ma=$starts[$i] - $ends[$i-1]
+    $duration=$ends[$i]-$starts[$i]
+    if (($ma -ge 6 ) -and ($duration -le 13)) {
         $shimostarts.Add($starts[$i]);$shimoends.Add($ends[$i])
     }
     else{
