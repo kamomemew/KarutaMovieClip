@@ -1,4 +1,5 @@
 ﻿{
-    "LosslessCut":  "C:\\Program Files (x86)\\LosslessCut-win-x64",
-    "ffmpeg":  "C:\\Program Files (x86)\\LosslessCut-win-x64\\resources\\ffmpeg.exe"
+    "silence_threshold":  0.67,
+    "ffmpeg":  "C:\\Program Files (x86)\\LosslessCut-win-x64\\resources\\ffmpeg.exe",
+    "LosslessCut":  "C:\\Program Files (x86)\\LosslessCut-win-x64"
 }

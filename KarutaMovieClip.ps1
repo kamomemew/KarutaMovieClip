@@ -1,5 +1,52 @@
 ﻿Import-Module ".\KarutaMovieClip.psm1"
-$configure=Get-Content -Path "configure.json" -Encoding "utf8" | ConvertFrom-Json
+# 設定値の読み込みを行う
+$configure = @{
+    LosslessCut       = "C:\Program Files (x86)\LosslessCut-win-x64\"
+    ffmpeg            = "ffmpeg.exe"
+    silence_threshold = 0.67
+}
+# configure.jsonの存在確認
+Write-Host -NoNewline "Checking config file ... "
+if ( Test-Path "configure.json" ) {
+    Write-Host -ForegroundColor Green "[OK]"
+    $configure = Get-Content -Path "configure.json" -Encoding "utf8" | ConvertFrom-Json
+}
+else {
+    Write-Host -ForegroundColor Red "[NG]"
+    ConvertTo-Json -InputObject $configure | Out-File -Encoding utf8 -FilePath configure.json
+}
+
+# ffmpegのパスを特定する
+
+if (-not ( Test-Path $configure.ffmpeg )) {
+    Write-Host -NoNewline "LosslessCut installed ... "
+    if (-not ( test-Path $configure.LosslessCut )) {
+        Write-Host -ForegroundColor Red "[NG]"
+        Add-Type -AssemblyName System.Windows.Forms
+        $result = [System.Windows.Forms.MessageBox]::Show("LosslessCutが見つかりませんでした。`nLossLessCutのフォルダを選択してください。", "確認", "YesNo", "Exclamation", "Button2")
+        if ($result -eq "Yes") {
+            [void][System.Reflection.Assembly]::LoadWithPartialName("System.windows.forms")
+            $dialog = New-Object System.Windows.Forms.FolderBrowserDialog -Property @{ Description = 'LosslessCutフォルダを選択してください' }
+            if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+                $configure.LosslessCut = $dialog.SelectedPath
+                $configure.ffmpeg = @(Get-ChildItem -Path $configure.LosslessCut -Recurse -Filter "ffmpeg.exe")[0].FullName
+            }
+        }
+    }
+    else{
+        Write-Host -ForegroundColor Green "[OK]"
+    }
+    $configure.ffmpeg = @(Get-ChildItem -Path $configure.LosslessCut -Recurse -Filter "ffmpeg.exe")[0].FullName
+    ConvertTo-Json -InputObject $configure | Out-File -Encoding utf8 -FilePath configure.json
+}
+Write-Host -NoNewline "FFmpeg installed ... "
+if (-not ( Test-Path $configure.ffmpeg )) {
+    Write-Host -ForegroundColor Red "[NG]"
+    [System.Windows.Forms.MessageBox]::Show("ffmpegが見つかりませんでした。`n終了します。", "エラー", "OK", "Error")
+    exit 1
+}
+Write-Host -ForegroundColor Green "[OK]"
+
 # 動画選択ダイアログを表示する
 [void][System.Reflection.Assembly]::LoadWithPartialName("System.windows.forms")
 $dialog = New-Object System.Windows.Forms.OpenFileDialog -Property @{Title = "動画ファイルを選択してください"}
@@ -12,11 +59,15 @@ $movie = $dialog.FileName
 # 動画があるフォルダに移動する
 Set-Location (Split-Path -Path $movie -Parent -Resolve)
 # 音量スレッショルド用の値取得
+Write-Host -NoNewline "Volume threshold setting ... "
 $volume_raw_text=&$configure.ffmpeg -v error -ss 600  -t 360 -i $movie -af "highpass=f=200,lowpass=f=3000,afftdn,aresample=44100,asetnsamples=2205,astats=reset=1:metadata=1,ametadata=print:key=lavfi.astats.Overall.peak_level:file='pipe\:1'" -vn -f null - |& { process{ $_.ToString() }}
 $peaks=$volume_raw_text| select-String "peak_level=(.*)$" | &{ process {[float]$($_.matches.groups[1]).ToString() }}
-$silence_threshold=(Get-Percentile -Sequence $peaks -Percentile 0.7).ToString("0.00")
+$silence_threshold=(Get-Percentile -Sequence $peaks -Percentile $configure.silence_threshold).ToString("0.00")
+Write-Host -ForegroundColor Green "[OK]"
+Write-Host -NoNewline "Silence detection ... "
 # FFmpegで空白検出、時間がかかる
 $silence_raw_text=&$configure.ffmpeg -i $movie -af "highpass=f=200,lowpass=f=3000,afftdn,silencedetect=n=$($silence_threshold)dB:d=1.5:m=0" -vn -f null - 2>&1|ForEach-Object { $_.ToString() }
+Write-Host -ForegroundColor Green "[OK]"
 # 空白の開始と終了を抽出
 $starts_Array =  $silence_raw_text| Select-String "silence_start: (.*)$"  |ForEach-Object { [float]$($_.matches.groups[1]).ToString() }
 $ends_Array = $silence_raw_text| Select-String "silence_end: (.*) \|" |ForEach-Object { [float]$($_.matches.groups[1]).ToString() }

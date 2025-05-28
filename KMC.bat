@@ -1,7 +1,5 @@
 @echo off
 cd /d %~dp0
-powershell -NoProfile  -executionpolicy RemoteSigned -File "%~dp0Configure.ps1"
-call :isSuccess
 
 powershell -NoProfile  -executionpolicy RemoteSigned -File "%~dp0KarutaMovieClip.ps1"
 call :isSuccess
