@@ -4,13 +4,14 @@
 
 
 ## インストール
-[リリースページ](https://github.com/kamomemew/KarutaMovieClip/releases)からダウンロードし、解凍してください。<br>
-このソフトウェアは動画編集には[LosslessCut](https://github.com/mifi/lossless-cut/)を使用するので、こちらもインストールしておいてください。(こちらも基本的に解凍するだけです。)
+[リリースページ](https://github.com/kamomemew/KarutaMovieClip/releases)からKarutaMovieClip.exeをダウンロードてください。<br>
+このソフトウェアは動画編集には[LosslessCut](https://github.com/mifi/lossless-cut/)を使用するので、こちらもインストールしておいてください。
+(解凍するだけです。)
 LossLessCutのインストールについてはここで詳しく触れませんが、表示を日本語にしておくと便利です。
 
 
 ## 設定
-KMC.batを起動してください。
+KarutaMovieClip.exeを起動してください。
 初回起動時にLosslessCutのフォルダを聞くので、LosslessCutのフォルダ(たとえば`C:\Program Files (x86)\LosslessCut-win-x64\`など)
 を入力してください。
 `configure.json`は設定ファイルです。
