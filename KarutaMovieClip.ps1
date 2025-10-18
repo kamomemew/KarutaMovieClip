@@ -32,6 +32,9 @@ if (-not ( Test-Path $configure.ffmpeg )) {
                 $configure.ffmpeg = @(Get-ChildItem -Path $configure.LosslessCut -Recurse -Filter "ffmpeg.exe")[0].FullName
             }
         }
+        else{
+            exit
+        }
     }
     else{
         Write-Host -ForegroundColor Green "[OK]"
@@ -60,13 +63,18 @@ $movie = $dialog.FileName
 Set-Location (Split-Path -Path $movie -Parent -Resolve)
 # 音量スレッショルド用の値取得
 Write-Host -NoNewline "Volume threshold setting ... "
-$volume_raw_text=&$configure.ffmpeg -v error -ss 600  -t 360 -i $movie -af "highpass=f=200,lowpass=f=3000,afftdn,aresample=44100,asetnsamples=2205,astats=reset=1:metadata=1,ametadata=print:key=lavfi.astats.Overall.peak_level:file='pipe\:1'" -vn -f null - |& { process{ $_.ToString() }}
-$peaks=$volume_raw_text| select-String "peak_level=(.*)$" | &{ process {[float]$($_.matches.groups[1]).ToString() }}
-$silence_threshold=(Get-Percentile -Sequence $peaks -Percentile $configure.silence_threshold).ToString("0.00")
-Write-Host -ForegroundColor Green "[OK]"
+if($configure.silence_threshold | Select-String "dB" -Quiet){
+    $silence_threshold=([float]($configure.silence_threshold.Replace("dB",""))).ToString("0.00")
+}
+else {
+    $volume_raw_text=&$configure.ffmpeg -v error -ss 600  -t 360 -i $movie -af "firequalizer=gain='if(lt(f,1600),if(gt(f,350),0,-INF),-INF)',aresample=44100,asetnsamples=2205,astats=reset=1:metadata=1,ametadata=print:key=lavfi.astats.Overall.peak_level:file='pipe\:1'" -vn -f null - |& { process{ $_.ToString() }}
+    $peaks=$volume_raw_text| select-String "peak_level=(.*)$" | &{ process {[float]$($_.matches.groups[1]).ToString() }}
+    $silence_threshold=(Get-Percentile -Sequence $peaks -Percentile $configure.silence_threshold).ToString("0.00")
+}
+Write-Host -ForegroundColor Green "$silence_threshold dB"
 Write-Host -NoNewline "Silence detection ... "
 # FFmpegで空白検出、時間がかかる
-$silence_raw_text=&$configure.ffmpeg -i $movie -af "highpass=f=200,lowpass=f=3000,afftdn,silencedetect=n=$($silence_threshold)dB:d=1.5:m=0" -vn -f null - 2>&1|ForEach-Object { $_.ToString() }
+$silence_raw_text=&$configure.ffmpeg -i $movie -af "firequalizer=gain='if(lt(f,1600),if(gt(f,350),0,-INF),-INF)',silencedetect=n=$($silence_threshold)dB:d=0.8:m=0" -vn -f null - 2>&1|ForEach-Object { $_.ToString() }
 Write-Host -ForegroundColor Green "[OK]"
 # 空白の開始と終了を抽出
 $starts_Array =  $silence_raw_text| Select-String "silence_start: (.*)$"  |ForEach-Object { [float]$($_.matches.groups[1]).ToString() }
@@ -83,6 +91,8 @@ $starts,$ends = Merge-Gaps -starts $starts -ends $ends -sec 3.9
 $starts,$ends = Select-Invert -starts $starts -ends $ends
 #$starts,$ends = Select-Span -starts $starts -ends $ends -gt 2
 $starts,$ends = Deny-Gap -before -after -starts $starts -ends $ends -sec 7
+#読みのとき。
+#$starts,$ends = Merge-Gaps -starts $starts -ends $ends -sec 4
 
 if ($starts.Count -lt 135)
 {
