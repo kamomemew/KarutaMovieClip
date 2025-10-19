@@ -221,6 +221,55 @@ function Test-DataIntegrity {
     }
 }
 
+function Get-KamiShimoList {
+        param (
+        [System.Collections.Generic.List[float]]$starts,
+        [System.Collections.Generic.List[float]]$ends
+    )
+    process{
+        $kamishimo = New-Object  "System.Collections.Generic.List[string]"
+        for ($i = 0; $i -lt $starts.Count; $i++) {
+            $kamishimo.Add("")
+        }
+        $kamishimo[0]="?";$kamishimo[-1]=("?")
+        for ($i = 1; $i -lt $starts.Count-1; $i++) {
+            if((($ends[$i-1]-$starts[$i]) -ge 6) -and (($starts[$i+1] - $ends[$i]) -ge 6) -and (($ends[$i] - $starts[$i]) -le 13)){
+                $kamishimo[$i] = "?"
+                continue
+            }
+            if (($starts[$i+1] - $ends[$i]) -ge 6){
+                $kamishimo[$i] = "kami"
+                continue
+            }
+            elseif(($starts[$i]-$ends[$i-1]) -ge 6) {
+                $kamishimo[$i] = "shimo"
+            }
+        }
+        $modified=$false
+        do {
+            $modified = $false
+            for ($i = 1; $i -lt $starts.Count-1; $i++) {
+                if($kamishimo[$i] -eq ""){
+                    if ($kamishimo[$i+1] |Select-String "kami" -Quiet){
+                        $kamishimo[$i] = "*shimo"
+                        $modified = $true
+                    }
+                    elseif ($kamishimo[$i-1] |Select-String "shimo" -Quiet) {
+                        $kamishimo[$i] = "*kami"
+                        $modified = $true
+                    }
+                }
+            }
+        } while ($modified)
+        for ($i = 1; $i -lt $starts.Count-1; $i++) {
+            if($kamishimo[$i] -eq ""){
+                $kamishimo[$i] = "?"
+            }
+        }
+        return $kamishimo
+    }
+}
+
 function Test-Silence {
     <#
     .SYNOPSIS
@@ -328,3 +377,4 @@ Export-ModuleMember -Function Test-Silence
 Export-ModuleMember -Function Get-SlopeFactor
 Export-ModuleMember -Function Get-VolumeInfo
 Export-ModuleMember -Function Get-Percentile
+Export-ModuleMember -Function Get-KamiShimoList

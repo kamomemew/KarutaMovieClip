@@ -115,6 +115,33 @@ if($proceed -eq "No"){
     exit 0
 }
 
+if(Test-Path segment.csv){Remove-Item segment.csv}
+$kamishimo = Get-KamiShimoList -starts $starts -ends $ends
+$c=0
+for($i = 0; $i -lt $starts.Count; $i++){
+    if ($kamishimo[$i] | Select-String "kami" -Quiet){
+        [string]$starts[$i]+","+[string]$ends[$i]+","+[string]$kamishimo[$i]+($c+1) |Out-File -Append -Encoding utf8 segment.csv
+        $c=$c+1
+    }
+}
+$c=0
+for($i = 0; $i -lt $starts.Count; $i++){
+    if ($kamishimo[$i] | Select-String "shimo" -Quiet){
+        [string]$starts[$i]+","+[string]$ends[$i]+","+[string]$kamishimo[$i]+($c+1) |Out-File -Append -Encoding utf8 segment.csv
+        $c=$c+1
+    }
+}
+$c=0
+for($i = 0; $i -lt $starts.Count; $i++){
+    
+    if ($kamishimo[$i] | Select-String "\?" -Quiet){
+        [string]$starts[$i]+","+[string]$ends[$i]+","+[string]$kamishimo[$i]+($c+1) |Out-File -Append -Encoding utf8 segment.csv
+        $c=$c+1
+    }
+}
+exit 0
+
+
 $kamistarts   = New-Object System.Collections.Generic.List[float]
 $kamiends     = New-Object System.Collections.Generic.List[float]
 $shimostarts   = New-Object System.Collections.Generic.List[float]
