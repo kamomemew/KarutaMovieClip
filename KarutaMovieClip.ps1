@@ -57,7 +57,7 @@ $movie = $false
 if($dialog.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK){
     exit 1
 }
-$movie = $dialog.FileName
+$movie = (Resolve-Path $dialog.FileName)
 
 # 動画があるフォルダに移動する
 Set-Location (Split-Path -Path $movie -Parent -Resolve)
@@ -108,26 +108,27 @@ if ($starts.Count -lt 135)
 
 $proceed=[System.Windows.Forms.MessageBox]::Show("続けて上の句検出しますか？`n(実験的機能です。)","info","YesNo","Information ")
 if($proceed -eq "No"){
-    if(Test-Path segment.csv){Remove-Item segment.csv}
+    $segment=(Get-ChildItem $movie).BaseName + ".csv"
+    if(Test-Path $segment){Remove-Item $segment}
     for($i = 0; $i -lt $starts.Count; $i++){
-        [string]$starts[$i]+","+[string]$ends[$i]+",seg_"+($i+1) |Out-File -Append -Encoding utf8 segment.csv
+        [string]$starts[$i]+","+[string]$ends[$i]+",seg_"+($i+1) |Out-File -Append -Encoding utf8 $segment
     }
     exit 0
 }
-
-if(Test-Path segment.csv){Remove-Item segment.csv}
+$segment=(Get-ChildItem $movie).BaseName + ".csv"
+if(Test-Path $segment){Remove-Item $segment}
 $kamishimo = Get-KamiShimoList -starts $starts -ends $ends
 $c=0
 for($i = 0; $i -lt $starts.Count; $i++){
     if ($kamishimo[$i] | Select-String "kami" -Quiet){
-        [string]$starts[$i]+","+[string]$ends[$i]+","+[string]$kamishimo[$i]+($c+1) |Out-File -Append -Encoding utf8 segment.csv
+        [string]$starts[$i]+","+[string]$ends[$i]+","+[string]$kamishimo[$i]+($c+1) |Out-File -Append -Encoding utf8 $segment
         $c=$c+1
     }
 }
 $c=0
 for($i = 0; $i -lt $starts.Count; $i++){
     if ($kamishimo[$i] | Select-String "shimo" -Quiet){
-        [string]$starts[$i]+","+[string]$ends[$i]+","+[string]$kamishimo[$i]+($c+1) |Out-File -Append -Encoding utf8 segment.csv
+        [string]$starts[$i]+","+[string]$ends[$i]+","+[string]$kamishimo[$i]+($c+1) |Out-File -Append -Encoding utf8 $segment
         $c=$c+1
     }
 }
@@ -138,31 +139,5 @@ for($i = 0; $i -lt $starts.Count; $i++){
         [string]$starts[$i]+","+[string]$ends[$i]+","+[string]$kamishimo[$i]+($c+1) |Out-File -Append -Encoding utf8 segment.csv
         $c=$c+1
     }
-}
-exit 0
-
-
-$kamistarts   = New-Object System.Collections.Generic.List[float]
-$kamiends     = New-Object System.Collections.Generic.List[float]
-$shimostarts   = New-Object System.Collections.Generic.List[float]
-$shimoends     = New-Object System.Collections.Generic.List[float]
-
-$kamistarts.Add($starts[0]);$kamiends.Add($ends[0])
-for ($i = 1; $i -lt $starts.Count; $i++) {
-    $ma=$starts[$i] - $ends[$i-1]
-    $duration=$ends[$i]-$starts[$i]
-    if (($ma -ge 6 ) -and ($duration -le 13)) {
-        $shimostarts.Add($starts[$i]);$shimoends.Add($ends[$i])
-    }
-    else{
-        $kamistarts.Add($starts[$i]);$kamiends.Add($ends[$i])
-    }
-}
-if(Test-Path segment.csv){Remove-Item segment.csv}
-for($i = 0; $i -lt $kamistarts.Count; $i++){
-    [string]$kamistarts[$i]+","+[string]$kamiends[$i]+",kami_"+($i+1) |Out-File -Append -Encoding utf8 segment.csv
-}
-for($i = 0; $i -lt $shimostarts.Count; $i++){
-    [string]$shimostarts[$i]+","+[string]$shimoends[$i]+",shimo_"+($i+1) |Out-File -Append -Encoding utf8 segment.csv
 }
 exit 0
